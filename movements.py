@@ -113,13 +113,25 @@ class controller:
 				threadAudio.start()
 
 			elif stopttime_action == 1000 and not threadAudio.is_alive():
+				for i in [2, 3]:
+						msg_cos.data[i] = 0
+				self.pub_cos.publish(msg_cos)
 				return
 		
-			if curr_time == stopttime_audio: # if action > audio but audio max is reached, stop audio
+			if stopttime_audio != 1000 and curr_time == stopttime_audio: # if action > audio but audio max is reached, stop audio
 
 				exit_event.set()
 			
 			if curr_time == max(stopttime_action, stopttime_audio): # if max length is reached, stop
+				for i in [2, 3]:
+						msg_cos.data[i] = 0
+
+				for i in range(1,3):
+					msg_kin.position[i] = 0
+
+				self.pub_kin.publish(msg_kin)
+				self.pub_cos.publish(msg_cos)
+
 				return
 
 			#otherwise continue with movement code
@@ -281,10 +293,10 @@ class controller:
 
 		self.audio = streamer(input)
 
-
 		# move ears
 		if input =="ph1_intro":			# eyes
 			self.cos = "e"
+			self.kin = ""
 		elif input == "ph1_same":		# wag
 			self.cos = "w"
 		elif input =="ph1_shake":		# workout
@@ -297,31 +309,41 @@ class controller:
 		elif input == "ph1_squeeze":	# spin
 			self.spin = 2.0
 		elif input == "ph1_outro":		# eyes and ears
-			self.cos = "ey"				
-		
+			self.cos = "ey"
 
-		# lights, ears, neck and wiggle
-		elif input == "ph2_congratulations":
+
+		if input == "ph2_congratulations":
 			self.illum = True
 			self.cos = "lrx"
 			self.kin = "lyp"
-
-		# danceparty
-		elif input == "ph2_music1" or "ph2_music2":
+		elif input == "ph2_music1" or input == "ph2_music2":
+			self.cos = "lrx"
+			self.kin = "lyp"
+		elif input == "ph2_sh_donkey" or input == "ph2_sh_dog" or input == "ph2_sh_cat" or input == "ph2_sh_cow" or input == "ph2_sh_lion":
+			self.cos = "w" # wag
+			self.kin = ""
+		elif input == "ph2_cat" or input == "ph2_cow" or input == "ph2_dog":
+			self.cos = "d"
+			self.kin = ""
+		elif input == "ph2_donkey" or "ph2_cow":
+			self.cos = "d" # droop
+			self.kin = "ey"
+		elif input == "ph2_lion":
 			self.cos = "lrx"
 			self.kin = "lyp"
 
-
-		elif input == "ph2_sh_donkey" or input == "ph2_sh_dog" or input == "ph2_sh_cat" or input == "ph2_sh_cow" or input == "ph2_sh_lion":
-			# intro units
-			self.cos = "w" # wag
-		elif input == "ph2_cat" or input == "ph2_cow" or input == "ph2_dog" or input == "ph2_donkey" or input == "ph2_lion":
-			self.cos = "d" # droop
-
-		# story
+		if input == "ph3_intro":
+			self.cos = "e"
+			self.kin = ""
+		elif input == "ph3_1":
+			self.cos = "d"
+			self.kin = ""
+		elif input == "ph3_1" or input == "ph3_3":
+			self.cos = "w"
 		elif input == "ph3_2" or input == "ph3_5":
 			self.cos = "yew"
-		elif input == "ph3_6":
+			self.kin = ""
+		elif input == "ph3_6" or input == "ph3_4":
 			self.cos = "lrx"
 			self.kin = "lyp"
 			self.illum = True
@@ -337,16 +359,6 @@ class controller:
 			"ph2_goodjob" : "ph2_32.mp3",
 			"ph2_next" : "ph2_33.mp3",
 		'''
-
-		'''
-			"ph3_intro" : "ph3_34.mp3",
-			"ph3_1" : "ph3_35.mp3",
-			"ph3_2" : "ph3_36.mp3",
-			"ph3_3" : "ph3_37.mp3",
-			"ph3_4" : "ph3_38.mp3",
-			"ph3_5" : "ph3_39.mp3",
-			"ph3_6" : "ph3_40.mp3",'''
-
 
 		# if sad story, droop
 
@@ -398,5 +410,5 @@ class controller:
 if __name__ == "__main__":
 
 	# normal singular invocation
-	main = controller("ph1_squeeze")
-	main.loop(200, 200)
+	main = controller("ph3_1")
+	main.loop(1000,1000)
