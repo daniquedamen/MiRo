@@ -1,8 +1,7 @@
 import uuid
 import csv
 import time
-import asyncio
-import os
+from datetime import datetime
 
 
 class Read_Sensors:
@@ -17,16 +16,9 @@ class Read_Sensors:
         self.cap_uuid = uuid.UUID("c3c8e822-f1cc-4edd-8e16-3b8624e5d377")
         self.air_uuid = uuid.UUID("659b10eb-350e-484b-b447-549ad5a258c4")
 
-        #self.mic_char = uuid.UUID("a25deb7b-ec5e-456d-b6e8-f0d0a0d49bee")
         self.mic = 0
-
-        #.imu_char = uuid.UUID("01410ba7-23f7-4516-8f17-25d4ebd8421c")
         self.imu = 0
-                 
-        #self.cap_char =  uuid.UUID("c3c8e822-f1cc-4edd-8e16-3b8624e5d377")
         self.cap = 0
-                           
-        #self.air_char = uuid.UUID("659b10eb-350e-484b-b447-549ad5a258c4")
         self.air = 0
         self.prev_air = 0
 
@@ -47,14 +39,18 @@ class Read_Sensors:
 
             writer.writerow(["start at:" + time.strftime("%Y%m%d_%H%M")])
             writer.writerow([])
-            writer.writerow(["minutes", "seconds", "mic", "imu", "cap", "air"])
+            writer.writerow(["min", "s", "elapsed_s", "mic", "imu", "cap", "air"])
             file.close()
 
             self.phasefile = phase
             
 
         self.timer()
-        mins, secs = divmod(int(self.elapsedtime), 60)
+        elapsed_secs = int(self.elapsedtime)
+        print(elapsed_secs)
+        now = datetime.now()
+        s = now.second
+        min = now.minute
 
 
         await self.Read_Mic(client)
@@ -65,16 +61,15 @@ class Read_Sensors:
         # write to file
         file = open(self.filename, 'a')
         writer = csv.writer(file)
-        writer.writerow([mins, secs, self.mic, self.imu, self.cap, self.air])
+        writer.writerow([min, s, elapsed_secs, self.mic, self.imu, self.cap, self.air])
         file.close()
 
 
     async def Read_Mic(self, client):
         self.mic = await client.read_gatt_char(char_specifier=self.mic_uuid)
         self.mic = int.from_bytes(self.mic, 'little')
-        # threshold is 300 Hz.
         # child voice = 250-400 Hz, cry = 300-600 Hz
-        if self.mic > 300:
+        if self.mic > 250:
             return 1
 
         return 0
@@ -96,26 +91,25 @@ class Read_Sensors:
         self.cap = await client.read_gatt_char(char_specifier=self.cap_uuid)
         self.cap = int.from_bytes(self.cap, 'little')
 
-        return self.cap
+        if (self.cap > 0):
+            return 1
+        
+        return 0
     
     async def Read_Air(self, client):
 
         self.air = await client.read_gatt_char(char_specifier=self.air_uuid)
         self.air = int.from_bytes(self.air, 'little')
 
-        if (self.prev_air == 0):
-            self.prev_air = self.air
-        elif (self.prev_air + 10 < self.air):
-            self.prev_air = self.air
+        if (self.air > 100):
             return 1
-        return 0   
+        
+        return 0
 
     def timer(self):
         if self.starttime == None:
             self.starttime = time.time() # in nanoseconds
 
         self.elapsedtime = (time.time() - self.starttime)
-        # otherwise just return
-
 
 

@@ -3,13 +3,13 @@
 This file reads the characteristic of the plushie.
 If there is any action: Shaking, Squeezing, Touch or Sounds, it will receive the interaction parameter.
 '''
-import uuid
-import asyncio
+
 import threading 
 
-
-from movements import controller
 from read_sensors import Read_Sensors
+from save_behaviour import Save
+
+from robot_action import call_action
 
 # class to write requested data from characteristic to file
 class ReadInteraction:
@@ -17,83 +17,87 @@ class ReadInteraction:
     def __init__(self):
 
         self.read = Read_Sensors()
-        
-        self.istimerrunning = 0
-        self.starttime = None
-        self.elapsedtime = None
+        self.save = Save()
+
+        # continue to next phase on user input (finish) or full discovery
         self.finish = None
+        # discovered already
+        self.discovered = []
 
-        self.exit_event = threading.Event()
-
+        # measured values
         self.imu = 0
         self.mic = 0
         self.cap = 0
         self.air = 0
 
-        self.prev_mic = 0
+        # previous measurement
         self.prev_imu = 0
+        self.prev_mic = 0
         self.prev_cap = 0
         self.prev_air = 0
 
-        
+
+
     def user_input(self):
-        while not self.exit_event.is_set():
+        if self.finish == None:
             self.finish = input("Enter '1' to save data from phase 1 and go to phase 2:\n")
-            self.exit_event.set()
-        return
+            self.save.save_to_file(1, "ph1_input:", self.finish)
+            return
 
-    # Read interaction byte
-    def action_plushie(self):
-        while not self.exit_event.is_set():
-            todo = None
-            if (self.imu == 1):
-                if (self.prev_imu == 0):
-                    print("IMU changed")
-                    todo = "shake"
-                self.prev_imu = self.imu
-            if (self.mic == 1):
-                if (self.prev_mic == 0):
-                    print("MIC changed")
-                    todo = "speaking"
-                self.prev_mic = self.mic
-            if (self.cap != 0):
-                if (self.prev_cap != self.cap):
-                    print("CAP changed")
-                    if (self.cap == 1):
-                        todo = "lowest"
-                    if (self.cap == 10):
-                        todo = "middle"
-                    if (self.cap == 100):
-                        todo = "upper"
-                self.prev_cap = self.cap
-            if (self.air == 1):
-                if (self.prev_air == 0):
-                    print("AIR changed")
-                    todo = "squeeze"
-                self.prev_air = self.air
 
-            if todo != None:
-                action = controller(todo)
-                action.loop(200, 200)
-        return
+    # Read if there is any interaction from sensors
+    async def read_sensors(self, client):
 
-    async def Readdata(self, client):
-        while not self.exit_event.is_set():
+        # airp does not handle exact values but difference with prev
+        self.air = await self.read.Read_Air(client)
+        self.prev_air = self.action_plushie(self.air, self.prev_air, "ph1_squeeze")
+
+        self.imu = await self.read.Read_IMU(client)
+        self.prev_imu = self.action_plushie(self.imu, self.prev_imu, "ph1_shake")
+
+        self.mic = await self.read.Read_Mic(client)
+        self.prev_mic = self.action_plushie(self.mic, self.prev_mic, "ph1_talk")
+
+        self.cap = await self.read.Read_CAP(client)
+        self.prev_cap = self.action_plushie(self.cap, self.prev_cap, "ph1_hold")
+
+
+    def action_plushie(self, measured, old, actionstring):
+        
+
+        if measured > old:
+
+            if self.discovered.count(actionstring) == 0:
+                old = measured
+                self.discovered.append(actionstring)
+            else:
+                actionstring = "ph1_same"
+
+            self.save.save_to_file(1, "ph1_action:", actionstring)
+            call_action(actionstring)
+
+        return old
+
+
+    async def phase1(self, client):
+
+        # play intro
+        call_action("ph1_intro")
+        self.save.save_to_file(1, "ph1_intro")
+
+        while self.finish != "1" and len(self.discovered) != 4:
+        
             await self.read.Read_char(client, 1)
-            self.imu = await self.read.Read_IMU(client)
-            self.mic = await self.read.Read_IMU(client)
-            self.cap = await self.read.Read_CAP(client)
-            self.air = await self.read.Read_Air(client)
-        return
 
+            InputThread = threading.Thread(target=self.user_input)
+            InputThread.start()
 
-    async def read_plushie(self, client):
-        InputThread = threading.Thread(target=self.user_input)
-        InputThread.start()
+            await self.read_sensors(client)
 
-        ActionThread = threading.Thread(target=self.action_plushie)
-        ActionThread.start()
-        await self.Readdata(client)
+        call_action("ph1_outro")
+        self.save.save_to_file(1, "ph1_outro")
+
+        
         return
 
 

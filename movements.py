@@ -1,8 +1,6 @@
 '''
-06-12-23 - Danique Damen (d.damen-1@student.utwente.nl)
-Actions as response to squeezing the Plushie
+Written for Plushie, HELPER project 5 jan 2024 by Danique Damen
 '''
-
 
 import rospy
 from std_msgs.msg import UInt8, UInt16, UInt32, Float32MultiArray, UInt16MultiArray, UInt32MultiArray
@@ -31,72 +29,6 @@ T_ramp_up_down = 2.0
 
 ################################################################
 
-def error(msg):
-
-	print(msg)
-	sys.exit(0)
-
-def usage():
-
-	print ("""
-Usage:
-	client_test.py <options>
-
-	Without arguments, this help page is displayed. To run the
-	client you must specify at least one option.
-
-Options:
-	listen
-		just listen
-
-	wheels (wheels- for reverse)
-		move forward (robot will move).
-
-	spin (spin- for reverse)
-		turn on the spot (robot will move).
-
-	stall (stall- for reverse)
-		test wheels and show additional data for stall analysis.
-
-	wheelsf (wheelsf- for reverse)
-		hold the wheels at maximum forward speed indefinitely.
-
-	push
-		test the push control channel.
-
-	kin (lift, yaw, pitch)
-		test all the kin(ematic) joints (or just one).
-
-	cos (cosl, cosr, eyes, ears, wag, droop, wagdroop)
-		test all the cos(metic) joints (or just a subset).
-
-	illum
-		exercise the LED illumination arrays.
-
-	workout
-		test all the kin and cos joints together.
-
-	forever
-		keep going until user hits CTRL+C
-
-	--quiet
-		be quiet
-
-	--no-cliff-reflex
-		disable robot's cliff reflex before beginning
-
-	--no-illum
-		disable illumination LEDs under shell
-
-	--status-leds
-		enable status LEDs on PCBs (won't work if locked)
-
-	--exit
-		exit immediately after setting flags, and make
-		flags persistent after exit
-	""")
-	sys.exit(0)
-
 def fmtflt(f):
 
 	return "{:.3f}".format(f)
@@ -120,7 +52,7 @@ class controller:
 		if not self.active:
 			return
 
-		# store
+		# storeprint("thread_alive?:", threadAudio.is_alive())
 		self.sensors = msg
 
 	def imp_report_wheels(self, msg_wheels):
@@ -135,11 +67,8 @@ class controller:
 				fmtflt(emf[0]) + " " + fmtflt(emf[1]) + " " + \
 				fmtflt(pwm[0]) + " " + fmtflt(pwm[1])
 			print (msg)
-			if not self.report_file is None:
-				self.report_file += msg + "\n"
 
-	def loop(self, stoptime_action, stoptime_audio):
-
+	def loop(self, stopttime_action, stopttime_audio):
 
 		# pars
 		f_kin = 0.25
@@ -164,211 +93,184 @@ class controller:
 		msg_illum = UInt32MultiArray()
 		msg_illum.data = [0, 0, 0, 0, 0, 0]
 
-		# define time and exit event to stop action and audio
+
 		curr_time = 0
 		exit_event = threading.Event()
+
 		# loop
 		while self.active and not rospy.core.is_shutdown():
 
+			# compute drive signals
+			xk = math.sin(t_now * f_kin * 2 * math.pi)
+			xc = math.sin(t_now * f_cos * 2 * math.pi)
+			xcc = math.cos(t_now * f_cos * 2 * math.pi)
+			xc2 = math.sin(t_now * f_cos * 1 * math.pi)
+
+		# at special time instances:
+			#at zero start audio thread
 			if curr_time == 0:
-				thread1 = threading.Thread(target=self.audio.loop, args=(exit_event,))
-				thread1.start()
+				threadAudio = threading.Thread(target=self.audio.loop, args=(exit_event,))
+				threadAudio.start()
 
-			if curr_time < stoptime_audio or curr_time < stoptime_action:
-				curr_time = curr_time + 1
-			if stoptime_audio == 1000 and stoptime_action == 1000:
-				thread1.join()
-				return 1
-			elif curr_time == max(stoptime_audio, stoptime_action):
-				return 1
+			elif stopttime_action == 1000 and not threadAudio.is_alive():
+				return
+		
+			if curr_time == stopttime_audio: # if action > audio but audio max is reached, stop audio
 
-			if curr_time == stoptime_audio:
 				exit_event.set()
+			
+			if curr_time == max(stopttime_action, stopttime_audio): # if max length is reached, stop
+				return
 
-			if curr_time < stoptime_action:
-				# here the code that stops when action stoptime is seen
-				# break on loss of state file
-				if not self.state_file is None:
-					if not os.path.isfile(self.state_file):
-						break
+			#otherwise continue with movement code
+			curr_time += 1
+			# send kin
+			if len(self.kin):
+				msg_kin.position[1] = np.radians(30.0)
+				msg_kin.position[2] = np.radians(0.0)
+				msg_kin.position[3] = np.radians(0.0)
+				if "l" in self.kin:
+					msg_kin.position[1] = xk * np.radians(20.0) + np.radians(30.0)
+				if "y" in self.kin:
+					t = xk * np.radians(45.0)
+					msg_kin.position[2] = t
+				if "p" in self.kin:
+					msg_kin.position[3] = xk * np.radians(15.0) + np.radians(-7.0)
+				self.pub_kin.publish(msg_kin)
 
-				# compute drive signals
-				xk = math.sin(t_now * f_kin * 2 * math.pi)
-				xc = math.sin(t_now * f_cos * 2 * math.pi)
-				xcc = math.cos(t_now * f_cos * 2 * math.pi)
-				xc2 = math.sin(t_now * f_cos * 1 * math.pi)
-
-				# feedback to user
-				c = self.count % 10
-				if c == 0 and self.report_input and not self.sensors is None:
-					print ("light", np.round(np.array(self.sensors.light.data) * 100.0))
-					print ("battery", np.round(np.array(self.sensors.battery.voltage) * 100.0) / 100.0)
-					print ("touch_body", '{0:016b}'.format(self.sensors.touch_body.data))
-					x = self.sensors.imu_head.linear_acceleration
-					print ("imu_head", [x.x, x.y, x.z])
-					print ("----------------------------------------------------------------")
-
-				# send kin
-				if len(self.kin):
-					msg_kin.position[1] = np.radians(30.0)
-					msg_kin.position[2] = np.radians(0.0)
-					msg_kin.position[3] = np.radians(0.0)
-					if "l" in self.kin:
-						msg_kin.position[1] = xk * np.radians(20.0) + np.radians(30.0)
-					if "y" in self.kin:
-						t = xk * np.radians(45.0)
-						if False:
-							# this branch is used to measure YAW_COUNTS_PER_RAD
-							t = (xk + 0.5) * np.radians(45.0)
-							t = np.clip(t, 0.0, np.radians(45.0))
-						msg_kin.position[2] = t
-					if "p" in self.kin:
-						msg_kin.position[3] = xk * np.radians(15.0) + np.radians(-7.0)
-					self.pub_kin.publish(msg_kin)
-					if not self.kin_sensor is None:
-						a = "[{:.3f}".format(msg_kin.position[1]) + "=" + "{:.3f}]".format(self.kin_sensor[1])
-						b = "[{:.3f}".format(msg_kin.position[2]) + "=" + "{:.3f}]".format(self.kin_sensor[2])
-						c = "[{:.3f}".format(msg_kin.position[3]) + "=" + "{:.3f}]".format(self.kin_sensor[3])
-						#print a, b, c
-
-				# send cos
-				if len(self.cos):
-					sc = 0.5
-					if "h" in self.cos:
-						for i in range(2, 6):
-							msg_cos.data[i] = xc * sc + 0.5
-					if "l" in self.cos:
-						for i in [2, 4]:
-							msg_cos.data[i] = xc * sc + 0.5
-					if "r" in self.cos:
-						for i in [3, 5]:
-							msg_cos.data[i] = xc * sc + 0.5
-					if "y" in self.cos:
-						for i in [2, 3]:
-							msg_cos.data[i] = xc * sc + 0.5
-					if "e" in self.cos:
-						for i in [4, 5]:
-							msg_cos.data[i] = xc * sc + 0.5
-					if "w" in self.cos:
+			# send cos
+			if len(self.cos):
+				sc = 0.5
+				if "h" in self.cos:
+					for i in range(2, 6):
+						msg_cos.data[i] = xc * sc + 0.5
+				if "l" in self.cos:
+					for i in [2, 4]:
+						msg_cos.data[i] = xc * sc + 0.5
+				if "r" in self.cos:
+					for i in [3, 5]:
+						msg_cos.data[i] = xc * sc + 0.5
+				if "y" in self.cos:
+					for i in [2, 3]:
+						msg_cos.data[i] = xc * sc + 0.5
+				if "e" in self.cos:
+					for i in [4, 5]:
+						msg_cos.data[i] = xc * sc + 0.5
+				if "w" in self.cos:
+					msg_cos.data[1] = xc * 0.5 + 0.5
+				if "d" in self.cos:
+					msg_cos.data[0] = xc * 0.5 + 0.5
+				if "x" in self.cos:
+					if xc2 >= 0:
 						msg_cos.data[1] = xc * 0.5 + 0.5
-					if "d" in self.cos:
+					else:
 						msg_cos.data[0] = xc * 0.5 + 0.5
-					if "x" in self.cos:
-						if xc2 >= 0:
-							msg_cos.data[1] = xc * 0.5 + 0.5
-						else:
-							msg_cos.data[0] = xc * 0.5 + 0.5
-					self.pub_cos.publish(msg_cos)
+				self.pub_cos.publish(msg_cos)
 
-				# send wheels
-				if not self.wheels is None:
+			# send wheels
+			if not self.wheels is None:
+				v = 0.0
+				Tq = 0.2
+				T = T_ramp_up_down
+				t1 = Tq
+				t2 = t1 + T
+				t3 = t2 + T
+				t4 = t3 + Tq
+				if t_now < t1:
 					v = 0.0
-					Tq = 0.2
-					T = T_ramp_up_down
-					t1 = Tq
-					t2 = t1 + T
-					t3 = t2 + T
-					t4 = t3 + Tq
-					if t_now < t1:
-						v = 0.0
-					elif t_now < t2:
-						v = (t_now - t1) / T
-					elif self.forever:
-						v = 1.0
-					elif t_now < t3:
-						v = 1.0 - (t_now - t2) / T
-					elif t_now < t4:
-						v = 0.0
-					else:
-						self.active = False
-					msg_wheels.twist.linear.x = v * self.wheels
-					msg_wheels.twist.angular.z = 0.0
-					self.pub_wheels.publish(msg_wheels)
-					self.imp_report_wheels(msg_wheels)
-
-				# send wheels
-				if not self.wheelsf is None:
-					msg_wheels.twist.linear.x = self.wheelsf
-					msg_wheels.twist.angular.z = 0.0
-					self.pub_wheels.publish(msg_wheels)
-					self.imp_report_wheels(msg_wheels)
-
-				# send wheels
-				if not self.spin is None:
+				elif t_now < t2:
+					v = (t_now - t1) / T
+				elif self.forever:
+					v = 1.0
+				elif t_now < t3:
+					v = 1.0 - (t_now - t2) / T
+				elif t_now < t4:
 					v = 0.0
-					Tq = 0.2
-					T = 1.0
-					t1 = Tq
-					t2 = t1 + T
-					t3 = t2 + T
-					t4 = t3 + Tq
-					if t_now < t1:
-						v = 0.0
-					elif t_now < t2:
-						v = (t_now - t1) / T
-					elif self.forever:
-						v = 1.0
-					elif t_now < t3:
-						v = 1.0 - (t_now - t2) / T
-					elif t_now < t4:
-						v = 0.0
-					else:
-						self.active = False
-					msg_wheels.twist.linear.x = 0.0
-					msg_wheels.twist.angular.z = v * 6.2832 * self.spin
-					self.pub_wheels.publish(msg_wheels)
-					self.imp_report_wheels(msg_wheels)
+				else:
+					self.active = False
+				msg_wheels.twist.linear.x = v * self.wheels
+				msg_wheels.twist.angular.z = 0.0
+				self.pub_wheels.publish(msg_wheels)
+				self.imp_report_wheels(msg_wheels)
 
-				# send push
-				if self.push:
-					msg_push.link = miro.constants.LINK_HEAD
-					msg_push.flags = miro.constants.PUSH_FLAG_VELOCITY
-					msg_push.pushpos = geometry_msgs.msg.Vector3(miro.constants.LOC_NOSE_TIP_X, miro.constants.LOC_NOSE_TIP_Y, miro.constants.LOC_NOSE_TIP_Z)
-					msg_push.pushvec = geometry_msgs.msg.Vector3(0.0, 0.2 * xk, 0.0)
-					self.pub_push.publish(msg_push)
+			# send wheels
+			if not self.wheelsf is None:
+				msg_wheels.twist.linear.x = self.wheelsf
+				msg_wheels.twist.angular.z = 0.0
+				self.pub_wheels.publish(msg_wheels)
+				self.imp_report_wheels(msg_wheels)
 
-				# send illum
-				if self.illum:
-					q = int(xcc * -127 + 128)
-					if t_now >= 4.0:
-						self.active = False
-						q = 0
-					for i in range(0, 3):
-						msg_illum.data[i] = (q << ((2-i) * 8)) | 0xFF000000
-					for i in range(3, 6):
-						msg_illum.data[i] = (q << ((i-3) * 8)) | 0xFF000000
-					self.pub_illum.publish(msg_illum)
+			# send wheels
+			if not self.spin is None:
+				v = 0.0
+				Tq = 0.2
+				T = 1.0
+				t1 = Tq
+				t2 = t1 + T
+				t3 = t2 + T
+				t4 = t3 + Tq
+				if t_now < t1:
+					v = 0.0
+				elif t_now < t2:
+					v = (t_now - t1) / T
+				elif self.forever:
+					v = 1.0
+				elif t_now < t3:
+					v = 1.0 - (t_now - t2) / T
+				elif t_now < t4:
+					v = 0.0
+				else:
+					self.active = False
+				msg_wheels.twist.linear.x = 0.0
+				msg_wheels.twist.angular.z = v * 6.2832 * self.spin
+				self.pub_wheels.publish(msg_wheels)
+				self.imp_report_wheels(msg_wheels)
 
-				# state
-				time.sleep(0.02)
-				self.count = self.count + 1
-				t_now = t_now + 0.02
+			# send push
+			if self.push:
+				msg_push.link = miro.constants.LINK_HEAD
+				msg_push.flags = miro.constants.PUSH_FLAG_VELOCITY
+				msg_push.pushpos = geometry_msgs.msg.Vector3(miro.constants.LOC_NOSE_TIP_X, miro.constants.LOC_NOSE_TIP_Y, miro.constants.LOC_NOSE_TIP_Z)
+				msg_push.pushvec = geometry_msgs.msg.Vector3(0.0, 0.2 * xk, 0.0)
+				self.pub_push.publish(msg_push)
 
-				# end loop
-				if not self.report_file is None:
-					with open('/tmp/client_test.report_file', 'w') as file:
-						file.write(self.report_file)
+			# send illum
+			if self.illum:
+				q = int(xcc * -127 + 128)
+				if t_now >= 4.0:
+					self.active = False
+					q = 0
+				for i in range(0, 3):
+					msg_illum.data[i] = (q << ((2-i) * 8)) | 0xFF000000
+				for i in range(3, 6):
+					msg_illum.data[i] = (q << ((i-3) * 8)) | 0xFF000000
+				self.pub_illum.publish(msg_illum)
 
+			# state
+			time.sleep(0.02)
+			self.count = self.count + 1
+			t_now = t_now + 0.02
 
+		# end loop
 
 	def __init__(self, input):
+
 		rospy.init_node("Action_from_interaction", anonymous=True)
 
 		# state
-		self.state_file = None
 		self.count = 0
 		self.active = False
-		self.forever = False	
+		self.forever = False
 
 		# input
-		self.report_input = True
+		#self.report_input = True
 		self.sensors = None
 
 		self.kin_sensor = None
 
 		# options
 		self.report_wheels = False
-		self.report_file = None
+		#self.report_file = None
 		self.wheels = None
 		self.wheelsf = None
 		self.spin = None
@@ -376,27 +278,77 @@ class controller:
 		self.cos = ""
 		self.illum = False
 		self.push = False
-		self.opts = []
 
 		self.audio = streamer(input)
-		# handle args
-		if input == "shake" or "crabsong":
+
+
+		# move ears
+		if input =="ph1_intro":			# eyes
+			self.cos = "e"
+		elif input == "ph1_same":		# wag
+			self.cos = "w"
+		elif input =="ph1_shake":		# workout
 			self.cos = "lrx"
 			self.kin = "lyp"
-			self.report_input = False
-		elif input == "squeeze":
-			self.spin = 1.0
-			self.report_input = False
-		elif input == "speaking":
-			self.cos = "y"
-			self.report_input = False
-		elif input == "upper" or input == "middle" or input == "lowest":
+		elif input == "ph1_hold": 		# wag
 			self.cos = "w"
-			self.report_input = False
+		elif input =="ph1_talk":		# ears
+			self.cos = "e"
+		elif input == "ph1_squeeze":	# spin
+			self.spin = 2.0
+		elif input == "ph1_outro":		# eyes and ears
+			self.cos = "ey"				
+		
 
-		# handle opts
-		if "--quiet" in self.opts:
-			self.report_input = False
+		# lights, ears, neck and wiggle
+		elif input == "ph2_congratulations":
+			self.illum = True
+			self.cos = "lrx"
+			self.kin = "lyp"
+
+		# danceparty
+		elif input == "ph2_music1" or "ph2_music2":
+			self.cos = "lrx"
+			self.kin = "lyp"
+
+
+		elif input == "ph2_sh_donkey" or input == "ph2_sh_dog" or input == "ph2_sh_cat" or input == "ph2_sh_cow" or input == "ph2_sh_lion":
+			# intro units
+			self.cos = "w" # wag
+		elif input == "ph2_cat" or input == "ph2_cow" or input == "ph2_dog" or input == "ph2_donkey" or input == "ph2_lion":
+			self.cos = "d" # droop
+
+		# story
+		elif input == "ph3_2" or input == "ph3_5":
+			self.cos = "yew"
+		elif input == "ph3_6":
+			self.cos = "lrx"
+			self.kin = "lyp"
+			self.illum = True
+
+				# simon says
+		'''
+			"ph2_intro_g3" : "ph2_26.mp3",
+			"ph2_a" : "ph2_27.mp3",
+			"ph2_blab" : "ph2_28.mp3",
+			"ph2_hold" : "ph2_29.mp3",
+			"ph2_shake" : "ph2_30.mp3",
+			"ph2_squeeze" : "ph2_31.mp3",
+			"ph2_goodjob" : "ph2_32.mp3",
+			"ph2_next" : "ph2_33.mp3",
+		'''
+
+		'''
+			"ph3_intro" : "ph3_34.mp3",
+			"ph3_1" : "ph3_35.mp3",
+			"ph3_2" : "ph3_36.mp3",
+			"ph3_3" : "ph3_37.mp3",
+			"ph3_4" : "ph3_38.mp3",
+			"ph3_5" : "ph3_39.mp3",
+			"ph3_6" : "ph3_40.mp3",'''
+
+
+		# if sad story, droop
 
 		# robot name
 		topic_base_name = "/" + os.getenv("MIRO_ROBOT_NAME")
@@ -440,36 +392,11 @@ class controller:
 		print ("wait for connect...")
 		time.sleep(1)
 
-		# send control flags
-		default_flags = miro.constants.PLATFORM_D_FLAG_DISABLE_STATUS_LEDS
-		msg = UInt32()
-		msg.data = default_flags
-		if "--exit" in self.opts:
-			msg.data |= miro.constants.PLATFORM_D_FLAG_PERSISTENT
-		if "--no-cliff-reflex" in self.opts:
-			msg.data |= miro.constants.PLATFORM_D_FLAG_DISABLE_CLIFF_REFLEX
-		if "--no-illum" in self.opts:
-			msg.data |= miro.constants.PLATFORM_D_FLAG_DISABLE_ILLUM
-		if "--status-leds" in self.opts:
-			msg.data &= ~(miro.constants.PLATFORM_D_FLAG_DISABLE_STATUS_LEDS)
-		print ("send control flags... ",)
-		print (hex(msg.data),)
-		self.pub_flags.publish(msg)
-		print ("OK")
-
-		# and exit
-		if "--exit" in self.opts:
-			print ("exit after setting flags...")
-			print ("(NB: flags will be reset if you run this client again)")
-			exit()
-
 		# set to active
 		self.active = True
 
 if __name__ == "__main__":
 
 	# normal singular invocation
-	main = controller("cat")
-	main.loop(1000, 1000)
-
-
+	main = controller("ph1_squeeze")
+	main.loop(200, 200)

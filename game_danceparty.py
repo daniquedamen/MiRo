@@ -3,43 +3,43 @@
 Danceparty game
 '''
 import random
-import time
 
 from read_sensors import Read_Sensors
-from movements import controller
+from robot_action import call_action
+from save_behaviour import Save
 
 class DanceParty:
 
     def __init__(self):
         self.read = Read_Sensors()
+        self.save = Save()
 
-    def play(self):
+    
+
+    async def play(self, client):
             
-            musictime = random.randint(200, 800)
-            robottime = musictime + 100
-            intro = controller("dancegame")
-            x = intro.loop(0, 1000)
+        musictime = random.randint(200, 800)
+        robottime = musictime + 100
+        await self.read.Read_char(client, 2)
 
-            time.sleep(10)
+        self.save.save_to_file(2, "intro_g1")   
+        call_action("ph2_intro_g1")
 
-            if x == 1:
-                dancegame = controller("crabsong")
-                y = dancegame.loop(robottime, musictime)
-                if y == 1:
-                    IMU = self.read.Read_IMU
-                    print(IMU)
-                    if IMU == 0:
-                        congratulations = controller("congratulations")
-                        z = congratulations.loop(0, 1000)
-                    else:
-                        tryagain = controller("tryagain")
-                        q = tryagain.loop(0, 1000)     
-                    print("done")
-                    return
+        whichmusic = random.randint(1, 2)
+        if whichmusic == 1:
+            music = "ph2_music1"
+        else: 
+            music = "ph2_music2" 
+        
+        self.save.save_to_file(2, music)
+        call_action(music, musictime, robottime)
 
+        IMU = await self.read.Read_IMU(client)
+        self.save.save_to_file(2, "IMU_activity:", IMU)
 
-if __name__=="__main__":
-    DanceClass = DanceParty()
-    DanceClass.play()
-    print("finished")
+        if IMU == 0:
+            
+            return 1
+
+        return 0
 

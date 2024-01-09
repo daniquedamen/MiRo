@@ -5,12 +5,14 @@ Connect via BLE to the server (MC) to receive data from its sensors.
 # libraries
 from bleak import BleakClient, BleakScanner
 import asyncio
-import uuid
 
 # own code
 from interaction_ph1 import ReadInteraction
 from games_ph2 import Games
 from stories_ph3 import Stories
+
+from save_behaviour import Save
+
 
 class PlushieReceiver:
 
@@ -22,6 +24,8 @@ class PlushieReceiver:
         self.Interact = ReadInteraction()
         self.Games = Games()
         self.Stories = Stories()
+
+        self.save = Save()
         
 
     # function to scan for BLE devices. When the IP Adress of the MC is found, return device
@@ -40,17 +44,26 @@ class PlushieReceiver:
     # device was found, connect as client.
     async def connect_plushie(self):
         async with BleakClient(self.device.address, loop=self.loop, timeout=100) as client:
-            print("Conne1cted to Plushie")
+            print("Connected to Plushie")
 
             services = await client.get_services()
             for service in services:
                 if service.uuid == "4bd03949-19ce-466a-9abc-c53119e26f87":
+
+                    self.save.save_to_file(0, "start")    
                 
-                    await self.Interact.read_plushie(client)
+                    await self.Interact.phase1(client)
+
+                    self.save.save_to_file(0, "from ph1 to ph2")
 
                     await self.Games.GameMenu(client)
+
+                    self.save.save_to_file(0, "from ph2 to ph3")
                     
                     await self.Stories.MagicWandStory(client)
+
+                    self.save.save_to_file(0, "done")
+
                     
             
 if __name__ == "__main__":
