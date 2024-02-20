@@ -26,6 +26,8 @@ class PlushieReceiver:
         self.Stories = Stories()
 
         self.save = Save()
+
+        self.phase = None
         
 
     # function to scan for BLE devices. When the IP Adress of the MC is found, return device
@@ -50,28 +52,38 @@ class PlushieReceiver:
             for service in services:
                 if service.uuid == "4bd03949-19ce-466a-9abc-c53119e26f87":
 
-                    self.save.save_to_file(0, "start")    
+                    if receiver.phase == "0" or receiver.phase == "1":
+                        self.save.save_to_file(0, "start")    
                 
-                    await self.Interact.phase1(client)
+                        await self.Interact.phase1(client)
+                        
+                        if receiver.phase == 1:
+                            return
 
-                    self.save.save_to_file(0, "from ph1 to ph2")
+                    if receiver.phase == "0" or receiver.phase == "2":
+                        self.save.save_to_file(0, "from ph1 to ph2")
 
-                    await self.Games.GameMenu(client)
+                        await self.Games.GameMenu(client)
 
-                    self.save.save_to_file(0, "from ph2 to ph3")
-                    
-                    await self.Stories.MagicWandStory(client)
+                        if receiver.phase == 2:
+                            return
 
-                    self.save.save_to_file(0, "done")
+                    if receiver.phase == "0" or receiver.phase == "3":
+                        self.save.save_to_file(0, "from ph2 to ph3")
+                        
+                        await self.Stories.MagicWandStory(client)
+
+                        self.save.save_to_file(0, "done")
 
                     
             
 if __name__ == "__main__":
     receiver = PlushieReceiver()
-    receiver.loop.run_until_complete(receiver.find_plushie())
-    receiver.loop.run_until_complete(receiver.connect_plushie())
-    print("Tests done")
-
+    receiver.phase = input("Full loop (0) or only interactionphase (1) or only game (2) or story (3)")
+    if receiver.phase != None:
+        receiver.loop.run_until_complete(receiver.find_plushie())
+        receiver.loop.run_until_complete(receiver.connect_plushie())
+        print("Tests done")
 
     
     

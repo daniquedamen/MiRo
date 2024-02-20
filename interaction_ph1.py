@@ -52,14 +52,22 @@ class ReadInteraction:
         self.air = await self.read.Read_Air(client)
         self.prev_air = self.action_plushie(self.air, self.prev_air, "ph1_squeeze")
 
+        await self.read.Read_char(client, 1)
+
         self.imu = await self.read.Read_IMU(client)
         self.prev_imu = self.action_plushie(self.imu, self.prev_imu, "ph1_shake")
+
+        await self.read.Read_char(client, 1)
 
         self.mic = await self.read.Read_Mic(client)
         self.prev_mic = self.action_plushie(self.mic, self.prev_mic, "ph1_talk")
 
+        await self.read.Read_char(client, 1)
+
         self.cap = await self.read.Read_CAP(client)
         self.prev_cap = self.action_plushie(self.cap, self.prev_cap, "ph1_hold")
+
+        await self.read.Read_char(client, 1)
 
 
     def action_plushie(self, measured, old, actionstring):
@@ -86,8 +94,6 @@ class ReadInteraction:
         self.save.save_to_file(1, "ph1_intro")
 
         while self.finish != "1" and len(self.discovered) != 4:
-        
-            await self.read.Read_char(client, 1)
 
             InputThread = threading.Thread(target=self.user_input)
             InputThread.start()

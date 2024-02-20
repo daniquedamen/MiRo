@@ -4,6 +4,8 @@ from read_sensors import Read_Sensors
 from robot_action import call_action
 from save_behaviour import Save
 
+import time
+
 class GuessAnimal:
 
     def __init__(self):
@@ -77,6 +79,9 @@ class GuessAnimal:
         await self.orderofsound(client)
         self.save.save_to_file(2, "finished animals")
 
+        time.sleep(3)
+
+        await self.read.Read_char(client, 2)
         interaction = await self.read.Read_IMU(client)
 
         if interaction == 1:

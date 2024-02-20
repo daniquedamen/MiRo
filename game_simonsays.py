@@ -29,7 +29,6 @@ class SimonSays:
 
         for task in read_data:
             result = await read_data[task](client)
-            print(result)
             if result == 1:
                 return 1
             
@@ -67,8 +66,9 @@ class SimonSays:
             
             task = self.tasks()
 
-            time.sleep(5)
+            time.sleep(2)
             interaction = await self.Interactioncheck(task, client)
+
             await self.read.Read_char(client, 2)
 
             # when the interaction is equal to the task

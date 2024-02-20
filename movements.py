@@ -106,8 +106,9 @@ class controller:
 			xcc = math.cos(t_now * f_cos * 2 * math.pi)
 			xc2 = math.sin(t_now * f_cos * 1 * math.pi)
 
-		# at special time instances:
+			# at special time instances:
 			#at zero start audio thread
+
 			if curr_time == 0:
 				threadAudio = threading.Thread(target=self.audio.loop, args=(exit_event,))
 				threadAudio.start()
@@ -133,10 +134,11 @@ class controller:
 				self.pub_cos.publish(msg_cos)
 
 				return
-
+		
 			#otherwise continue with movement code
-			curr_time += 1
+			#curr_time += 1
 			# send kin
+			self.kin = ""
 			if len(self.kin):
 				msg_kin.position[1] = np.radians(30.0)
 				msg_kin.position[2] = np.radians(0.0)
@@ -150,7 +152,9 @@ class controller:
 					msg_kin.position[3] = xk * np.radians(15.0) + np.radians(-7.0)
 				self.pub_kin.publish(msg_kin)
 
+
 			# send cos
+			self.cos = ""
 			if len(self.cos):
 				sc = 0.5
 				if "h" in self.cos:
@@ -246,6 +250,7 @@ class controller:
 				msg_push.pushvec = geometry_msgs.msg.Vector3(0.0, 0.2 * xk, 0.0)
 				self.pub_push.publish(msg_push)
 
+			self.illum = True
 			# send illum
 			if self.illum:
 				q = int(xcc * -127 + 128)
@@ -253,11 +258,11 @@ class controller:
 					self.active = False
 					q = 0
 				for i in range(0, 3):
-					msg_illum.data[i] = (q << ((2-i) * 8)) | 0xFF000000
+					msg_illum.data[i] = (q << ((2-i) * 8)) | 0xFF000000 
 				for i in range(3, 6):
 					msg_illum.data[i] = (q << ((i-3) * 8)) | 0xFF000000
-				self.pub_illum.publish(msg_illum)
 
+				self.pub_illum.publish(msg_illum)
 			# state
 			time.sleep(0.02)
 			self.count = self.count + 1
@@ -295,7 +300,7 @@ class controller:
 
 		# move ears
 		if input =="ph1_intro":			# eyes
-			self.cos = "e"
+			self.cos = "y"
 			self.kin = ""
 		elif input == "ph1_same":		# wag
 			self.cos = "w"
@@ -322,12 +327,11 @@ class controller:
 		elif input == "ph2_sh_donkey" or input == "ph2_sh_dog" or input == "ph2_sh_cat" or input == "ph2_sh_cow" or input == "ph2_sh_lion":
 			self.cos = "w" # wag
 			self.kin = ""
-		elif input == "ph2_cat" or input == "ph2_cow" or input == "ph2_dog":
+		elif input == "ph2_cat" or input == "ph2_dog":
 			self.cos = "d"
 			self.kin = ""
 		elif input == "ph2_donkey" or "ph2_cow":
-			self.cos = "d" # droop
-			self.kin = "ey"
+			self.cos = "dey" # droop
 		elif input == "ph2_lion":
 			self.cos = "lrx"
 			self.kin = "lyp"
@@ -338,7 +342,7 @@ class controller:
 		elif input == "ph3_1":
 			self.cos = "d"
 			self.kin = ""
-		elif input == "ph3_1" or input == "ph3_3":
+		elif input == "ph3_3":
 			self.cos = "w"
 		elif input == "ph3_2" or input == "ph3_5":
 			self.cos = "yew"
@@ -410,5 +414,5 @@ class controller:
 if __name__ == "__main__":
 
 	# normal singular invocation
-	main = controller("ph3_1")
-	main.loop(1000,1000)
+	main = controller("ph1_intro")
+	main.loop(1000,0)

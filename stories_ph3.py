@@ -20,12 +20,16 @@ class Stories:
             return
 
     async def story(self, client): 
-        for i in range(7):
+        for i in range(6):
             sensor = 0
             while sensor == 0:
+                await self.read.Read_char(client, 2)
                 if i == 1 or i == 5:
                     sensor = await self.read.Read_Air(client)
                     print("air")
+                elif i == 4:
+                    sensor = await self.read.Read_Mic(client)
+                    print("mic")
                 else:
                     sensor = await self.read.Read_IMU(client)
                     print("IMU")

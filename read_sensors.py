@@ -52,11 +52,14 @@ class Read_Sensors:
         s = now.second
         min = now.minute
 
-
         await self.Read_Mic(client)
+
         await self.Read_IMU(client)
+
         await self.Read_CAP(client)
+
         await self.Read_Air(client)
+
 
         # write to file
         file = open(self.filename, 'a')
@@ -69,7 +72,7 @@ class Read_Sensors:
         self.mic = await client.read_gatt_char(char_specifier=self.mic_uuid)
         self.mic = int.from_bytes(self.mic, 'little')
         # child voice = 250-400 Hz, cry = 300-600 Hz
-        if self.mic > 250:
+        if self.mic > 150:
             return 1
 
         return 0
@@ -81,7 +84,7 @@ class Read_Sensors:
         self.imu = await client.read_gatt_char(char_specifier=self.imu_uuid)
         self.imu = int.from_bytes(self.imu, 'little')
     
-        if (self.imu > 200):
+        if (self.imu > 150):
             return 1
         
         return 0

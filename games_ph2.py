@@ -8,6 +8,8 @@ from game_guessanimal import GuessAnimal
 from robot_action import call_action
 from save_behaviour import Save
 
+import time
+
 class Games:
 
     def __init__(self):
@@ -39,6 +41,10 @@ class Games:
             self.save.save_to_file(2, "ph2_input:", self.game)
 
     async def sensor_input(self, client):
+        
+        # TODO: check length(ening) delay
+        time.sleep(3)
+
         IMU = await self.read.Read_IMU(client)
         if IMU == 1:
             self.game = 1

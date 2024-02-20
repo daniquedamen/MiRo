@@ -167,7 +167,7 @@ class streamer:
 			time.sleep(0.1)
 
 
-	def __init__(self, action):
+	def __init__(self, input):
 		rospy.init_node("Action_from_interaction", anonymous=True)
 
 		action_tracks = {
@@ -219,7 +219,7 @@ class streamer:
 
 		}
 
-		TRACK_FILE = action_tracks.get(action)
+		TRACK_FILE = action_tracks.get(input)
 
 		print(TRACK_FILE)
 		
